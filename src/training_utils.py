@@ -1,25 +1,83 @@
-from torch.optim.lr_scheduler import ExponentialLR
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import ExponentialLR
 
 
-def get_loss_function() -> nn.Module:
+def init_weights(model):
     """
-    Returns the loss function for the sanity check: Binary Cross Entropy Loss.
-    Returns:
-        nn.Module: Loss function
+    Applies the specific weight initialization from the Siamese Paper.
+    Conv Layers: Weights ~ N(0, 1e-2), Biases ~ N(0.5, 1e-2)
+    FC Layers: Weights ~ N(0, 2e-1), Biases ~ N(0.5, 1e-2)
+    """
+    for m in model.modules():
+        if isinstance(m, nn.Conv2d):
+            # Conv: Weights N(0, 1e-2), Biases N(0.5, 1e-2)
+            nn.init.normal_(m.weight, 0, 1e-2)
+            if m.bias is not None:
+                nn.init.normal_(m.bias, 0.5, 1e-2)
+
+        elif isinstance(m, nn.Linear):
+            # FC: Weights N(0, 2e-1), Biases N(0.5, 1e-2)
+            nn.init.normal_(m.weight, 0, 2e-1)
+            if m.bias is not None:
+                nn.init.normal_(m.bias, 0.5, 1e-2)
+
+    print("Weights initialized according to paper specifications.")
+
+
+def get_loss_function():
+    """
+    Paper: 'Regularized cross-entropy objective'
+    Note: The L2 regularization (lambda) is handled in the optimizer.
     """
     return nn.BCELoss()
 
 
-def get_optimizer(model, lr=0.001, momentum=None, weight_decay=None) -> optim.Optimizer:
+def get_optimizer(model, lr=0.001, momentum=0.5, weight_decay=0.0001):
     """
-    Returns the optimizer for the sanity check: Adam optimizer with no momentum or weight decay.
+    Paper: SGD with momentum and L2 regularization.
+
     Args:
-        model: The model to optimize.
-        lr: Learning rate.
+        model: PyTorch model
+        lr: learning rate
         momentum: Initial momentum (paper starts at 0.5)
         weight_decay: This is the lambda parameter from the paper's loss equation.
     """
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.SGD(model.parameters(),
+                          lr=lr,
+                          momentum=momentum,
+                          weight_decay=weight_decay)
     return optimizer
+
+
+def get_lr_scheduler(optimizer):
+    """
+    Paper: 'decayed uniformly across the network by 1 percent per epoch'
+    Formula: lr_new = lr_old * 0.99
+    """
+    return ExponentialLR(optimizer, gamma=0.99)
+
+
+def adjust_momentum(optimizer, epoch, max_epochs, target_momentum=0.9):
+    """
+    Paper: 'fixed momentum to start at 0.5... increasing linearly each epoch'
+
+    This function should be called inside the training loop at the start of each epoch.
+    It linearly interpolates momentum from 0.5 to target_momentum.
+    """
+
+
+    start_momentum = 0.5
+
+    if epoch < max_epochs:
+        # Linear interpolation formula
+        new_momentum = start_momentum + \
+                       (epoch / max_epochs) * (target_momentum - start_momentum)
+    else:
+        new_momentum = target_momentum
+
+    # Update momentum for all parameter groups
+    for param_group in optimizer.param_groups:
+        param_group['momentum'] = new_momentum
+
+    return new_momentum
