@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+from src.config import DROPOUT
 
 class SiameseNetwork(nn.Module):
     """Siamese Network architecture for face identification."""
@@ -9,18 +9,22 @@ class SiameseNetwork(nn.Module):
 
         self.cnn = nn.Sequential(
             nn.Conv2d(1, 64, kernel_size=10),
+            nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2),
 
             nn.Conv2d(64, 128, kernel_size=7),
+            nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2),
 
             nn.Conv2d(128, 128, kernel_size=4),
+            nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2),
 
             nn.Conv2d(128, 256, kernel_size=4),
+            nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
         )
 
@@ -28,7 +32,9 @@ class SiameseNetwork(nn.Module):
 
         self.fc = nn.Sequential(
             nn.Linear(256 * 6 * 6, 4096),
-            nn.Sigmoid()
+            nn.BatchNorm1d(4096),
+            nn.Sigmoid(),
+            nn.Dropout(p=DROPOUT)
         )
 
         self.out = nn.Linear(4096, 1)
