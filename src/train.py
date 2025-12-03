@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from src.config import BATCH_SIZE, LEARNING_RATE, SEED, NUM_EPOCHS, PATIENCE, MOMENTUM_START, MOMENTUM_END
+from src.config import BATCH_SIZE, LEARNING_RATE, SEED, NUM_EPOCHS, PATIENCE, MOMENTUM_START, MOMENTUM_END, WEIGHT_DECAY
 from src.consts import PAIRS_FILE, IMG_DIR, DEVICE
 from src.dataset import get_train_val_datasets
 from src.models.siamese_model import SiameseNetwork
@@ -40,7 +40,7 @@ def main():
 
     criterion = get_loss_function()
     optimizer = get_optimizer(model, lr=LEARNING_RATE,
-                              momentum=MOMENTUM_START, weight_decay=0.0005)
+                              momentum=MOMENTUM_START, weight_decay=WEIGHT_DECAY)
     scheduler = get_lr_scheduler(optimizer)
 
     writer = SummaryWriter('runs/siamese_experiment')
