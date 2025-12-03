@@ -19,6 +19,7 @@ from src.evaluate import validate
 def main():
     set_seed(SEED)
     print(f"Running on: {DEVICE}")
+    print(f'training with brach and dropout')
 
     train_dataset, val_dataset = get_train_val_datasets(
         pairs_file=PAIRS_FILE,
