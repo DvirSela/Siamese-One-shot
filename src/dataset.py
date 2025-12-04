@@ -62,7 +62,7 @@ def parse_lfw_pairs(pairs_filepath, img_dir_path) -> Tuple[List[Tuple[str, str]]
     return pairs, labels
 
 
-def split_pairs_by_identity(pairs, labels, val_size=0.2, seed=42):
+def split_pairs_by_identity(pairs, labels, val_size=0.2, seed=42) -> Tuple[Tuple[List[Tuple[str, str]], List[int]], Tuple[List[Tuple[str, str]], List[int]]]:
     """
     Splits pairs into Train and Validation sets ensuring NO overlapping identities.
 
@@ -71,6 +71,12 @@ def split_pairs_by_identity(pairs, labels, val_size=0.2, seed=42):
         labels (list): List of labels [1, 0, ...]
         val_size (float): Percentage of identities to hold out.
         seed (int): the seed
+    Returns:
+        (train_pairs, train_labels), (val_pairs, val_labels)
+        train_pairs: List of tuples for training set
+        train_labels: Corresponding labels for training set
+        val_pairs: List of tuples for validation set
+        val_labels: Corresponding labels for validation set
     """
     # 1. Extract all unique identities from the pairs
     # We assume path format is: .../Name/Name_0001.jpg
@@ -132,15 +138,20 @@ def split_pairs_by_identity(pairs, labels, val_size=0.2, seed=42):
     return (train_pairs_clean, train_labels_clean), (val_pairs_clean, val_labels_clean)
 
 
-def generate_new_negatives(names_list, quantity, img_dir):
+def generate_new_negatives(names_list, quantity, img_dir) -> Tuple[List[Tuple[str, str]], List[int]]:
     """
     Generates new negative pairs from a list of allowed names.
+    Args:
+        names_list (list): List of names (identities) to sample from.
+        quantity (int): Number of negative pairs to generate.
+        img_dir (str): Directory where images are stored.
+    Returns:
+        new_pairs (list): List of newly generated negative pairs.
+        new_labels (list): List of labels (all 0s for negatives).
     """
     new_pairs = []
     new_labels = []
 
-    # Get all available images for these names
-    # Map: name -> [img1_path, img2_path, ...]
     name_to_imgs = {}
     valid_names = []
 
@@ -193,21 +204,46 @@ class SiameseDataset(Dataset):
     def __len__(self):
         return len(self.pairs)
 
-
-def get_train_val_datasets(pairs_file, img_dir, val_size=0.2, transform_train=None, transform_val=None):
+def get_train_val_datasets(pairs_file, img_dir, val_size=0.2, transform_train=None, transform_val=None) -> Tuple[SiameseDataset, SiameseDataset]:
     """
-    Orchestrates parsing, splitting, balancing, and Dataset creation.
-    Returns: (train_dataset, val_dataset)
+    Prepares the Siamese Train and Validation datasets with proper splitting and balancing.
+    Args:
+        pairs_file (str): Path to the pairs.txt file.
+        img_dir (str): Directory where images are stored.
+        val_size (float): Proportion of identities to use for validation.
+        transform_train: Transformations for training data.
+        transform_val: Transformations for validation data.
+    Returns:
+        train_dataset (SiameseDataset): Training dataset.
     """
     print("Parsing and Splitting Data...")
     all_train_pairs, all_train_labels = parse_lfw_pairs(pairs_file, img_dir)
 
-    # 1. Leak-Free Split
+    original_count = len(all_train_pairs)
+    
     (train_pairs, train_labels), (val_pairs, val_labels) = split_pairs_by_identity(
         all_train_pairs, all_train_labels, val_size=val_size
     )
+    
+    current_count = len(train_pairs) + len(val_pairs)
+    lost_pairs = original_count - current_count
 
-    # 2. Balance Validation Set
+    # I backfill the lost pairs as negatives in the TRAIN set
+    if lost_pairs > 0:
+        print(f"Recovering {lost_pairs} dropped pairs by generating new Training negatives...")
+        
+        train_names_set = set()
+        for p1, p2 in train_pairs:
+            train_names_set.add(p1.split(os.sep)[-2])
+            train_names_set.add(p2.split(os.sep)[-2])
+            
+        new_train_p, new_train_l = generate_new_negatives(
+            list(train_names_set), lost_pairs, img_dir
+        )
+        
+        train_pairs.extend(new_train_p)
+        train_labels.extend(new_train_l)
+
     val_pos = sum(val_labels)
     val_neg = len(val_labels) - val_pos
 
@@ -215,7 +251,6 @@ def get_train_val_datasets(pairs_file, img_dir, val_size=0.2, transform_train=No
         needed = int(val_pos - val_neg)
         print(f"Balancing Val Set: Generating {needed} new negative pairs...")
 
-        # Get valid names for validation only
         val_names_set = set()
         for p1, p2 in val_pairs:
             val_names_set.add(p1.split(os.sep)[-2])
@@ -226,10 +261,10 @@ def get_train_val_datasets(pairs_file, img_dir, val_size=0.2, transform_train=No
         val_pairs.extend(new_p)
         val_labels.extend(new_l)
 
-    print(
-        f"Final Dataset: Train {len(train_pairs)} pairs | Val {len(val_pairs)} pairs")
+    print(f"Final Dataset: Train {len(train_pairs)} pairs | Val {len(val_pairs)} pairs")
+    print(f"  Train Positives: {sum(train_labels)} | Train Negatives: {len(train_labels) - sum(train_labels)}")
+    print(f"  Val Positives: {sum(val_labels)} | Val Negatives: {len(val_labels) - sum(val_labels)}")
 
-    # 3. Create Dataset Objects
     train_dataset = SiameseDataset(
         train_pairs, train_labels, transform=transform_train)
     val_dataset = SiameseDataset(
