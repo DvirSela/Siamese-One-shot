@@ -10,4 +10,4 @@ WEIGHT_DECAY = 0.01
 MODEL_NAME = 'resnet18'
 # contrastive loss margin
 MARGIN = 2.0
-THRESHOLD = 1.0
+THRESHOLD = 12.0

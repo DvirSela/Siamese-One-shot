@@ -13,40 +13,50 @@ from src.models.siamese_model import SiameseNetwork
 from src.utils import set_seed
 from src.transforms import get_transforms
 
-
 def validate(model, val_loader, criterion):
     """
-    Simple validation loop for training progress monitoring.
-    Uses a fixed threshold (from config) to calculate accuracy.
+    Smart validation that finds the optimal threshold for the current epoch.
     """
     model.eval()
     total_loss = 0.0
-    total_correct = 0
-    total_samples = 0
-
-    threshold = THRESHOLD
-
+    
+    all_dists = []
+    all_labels = []
+    
     with torch.no_grad():
         for img1, img2, labels in val_loader:
-            img1, img2, labels = img1.to(DEVICE), img2.to(
-                DEVICE), labels.to(DEVICE)
-
+            img1, img2, labels = img1.to(DEVICE), img2.to(DEVICE), labels.to(DEVICE)
+            
             # Forward
             v1, v2 = model(img1, img2)
-
-            # Loss
+            
+            # Loss (Contrastive)
             loss = criterion(v1, v2, labels.squeeze())
             total_loss += loss.item() * img1.size(0)
-
+            
+            # Collect distances for accuracy calculation
             dist = torch.nn.functional.pairwise_distance(v1, v2)
-            predicted = (dist < threshold).float()
+            all_dists.extend(dist.cpu().numpy())
+            all_labels.extend(labels.squeeze().cpu().numpy())
+            
+    avg_loss = total_loss / len(all_labels)
 
-            total_correct += (predicted == labels.squeeze()).sum().item()
-            total_samples += img1.size(0)
-
-    avg_loss = total_loss / total_samples
-    avg_acc = total_correct / total_samples
-    return avg_loss, avg_acc
+    all_dists = np.array(all_dists)
+    all_labels = np.array(all_labels)
+    
+    best_acc = 0.0
+    # Scan min to max distance
+    min_d, max_d = all_dists.min(), all_dists.max()
+    
+    thresholds = np.linspace(min_d, max_d, 100)
+    
+    for thresh in thresholds:
+        predictions = (all_dists < thresh).astype(int)
+        acc = (predictions == all_labels).mean()
+        if acc > best_acc:
+            best_acc = acc
+            
+    return avg_loss, best_acc
 
 
 def inverse_transform(img_tensor) -> np.ndarray:
