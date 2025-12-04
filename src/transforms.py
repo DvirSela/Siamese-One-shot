@@ -61,22 +61,17 @@ class SiameseAffine:
             interpolation=transforms.InterpolationMode.BILINEAR
         )
 
-
-def get_transforms(is_train=True) -> transforms.Compose:
-    """
-    Args:
-        is_train (bool): Whether to return training or validation/test transforms.
-    Returns:
-        transforms.Compose: Composed transformations.
-    """
+def get_transforms(is_train=True):
     if is_train:
         return transforms.Compose([
             transforms.Grayscale(num_output_channels=1),
             SiameseAffine(),
-            transforms.ToTensor()
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5]) 
         ])
     else:
         return transforms.Compose([
             transforms.Grayscale(num_output_channels=1),
-            transforms.ToTensor()
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5])
         ])

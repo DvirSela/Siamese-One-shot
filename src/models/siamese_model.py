@@ -1,57 +1,74 @@
 import torch
 import torch.nn as nn
-from src.config import DROPOUT
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from torchvision import models
 
 class SiameseNetwork(nn.Module):
-    """
-    Siamese Network for Contrastive Learning.
-    Outputs raw feature embeddings instead of probability scores.
-    """
-    def __init__(self):
+    def __init__(self, backbone_name='resnet18', pretrained=True):
+        """
+        Siamese Network with interchangeable backbone.
+        Args:
+            backbone_name (str): 'resnet18', 'resnet34', 'resnet50', etc.
+            pretrained (bool): Whether to load ImageNet weights.
+        """
         super(SiameseNetwork, self).__init__()
+        
+        # 1. Load the Backbone
+        # We use the factory pattern to make swapping easy
+        if backbone_name == 'resnet18':
+            self.backbone = models.resnet18(weights='DEFAULT' if pretrained else None)
+            in_features = self.backbone.fc.in_features # 512
+        elif backbone_name == 'resnet34':
+            self.backbone = models.resnet34(weights='DEFAULT' if pretrained else None)
+            in_features = self.backbone.fc.in_features # 512
+        elif backbone_name == 'resnet50':
+            self.backbone = models.resnet50(weights='DEFAULT' if pretrained else None)
+            in_features = self.backbone.fc.in_features # 2048
+        else:
+            raise ValueError(f"Backbone {backbone_name} not supported yet.")
 
-        self.cnn = nn.Sequential(
-            nn.Conv2d(1, 64, kernel_size=10),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-
-            nn.Conv2d(64, 128, kernel_size=7),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-
-            nn.Conv2d(128, 128, kernel_size=4),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-
-            nn.Conv2d(128, 256, kernel_size=4),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
+        # 2. Modify First Layer for Grayscale
+        # ResNet expects 3 channels (RGB). We have 1 (Grayscale).
+        # We replace conv1 with a 1-channel version.
+        original_conv1 = self.backbone.conv1
+        self.backbone.conv1 = nn.Conv2d(
+            in_channels=1, 
+            out_channels=original_conv1.out_channels,
+            kernel_size=original_conv1.kernel_size,
+            stride=original_conv1.stride,
+            padding=original_conv1.padding,
+            bias=False
         )
+        
+        # Initialize the new 1-channel weights by averaging the original 3-channel weights
+        # This preserves the pre-trained filters' spatial structure.
+        with torch.no_grad():
+            self.backbone.conv1.weight.data = original_conv1.weight.data.mean(dim=1, keepdim=True)
 
-        self.adaptive_pool = nn.AdaptiveMaxPool2d((6, 6))
+        # 3. Remove the Classification Head (fc)
+        # We replace the final 'fc' layer with a simple Identity, 
+        # so we get the raw feature vector from the Global Average Pooling layer.
+        self.backbone.fc = nn.Identity()
 
+        # 4. Projection / Embedding Head
+        # Projects high-dim features to your desired embedding size
         self.fc = nn.Sequential(
-            nn.Linear(256 * 6 * 6, 4096),
-            nn.BatchNorm1d(4096),
+            nn.Linear(in_features, 512),
+            nn.BatchNorm1d(512),
             nn.ReLU(inplace=True)
+            # No Dropout needed here for ResNet usually, BN handles it
         )
 
     def forward_once(self, x):
-        output = self.cnn(x)
-        output = self.adaptive_pool(output)
-        output = output.view(output.size()[0], -1)
-        output = self.fc(output)
-
-        return output
+        # Pass through ResNet backbone
+        # Output shape: (Batch, in_features) e.g., (Batch, 512)
+        features = self.backbone(x)
+        
+        # Pass through projection head
+        embeddings = self.fc(features)
+        
+        return embeddings
 
     def forward(self, input1, input2):
-        output1 = self.forward_once(input1)
-        output2 = self.forward_once(input2)
-        return output1, output2
+        v1 = self.forward_once(input1)
+        v2 = self.forward_once(input2)
+        return v1, v2

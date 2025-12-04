@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from src.config import BATCH_SIZE, LEARNING_RATE, SEED, NUM_EPOCHS, PATIENCE, MOMENTUM_START, MOMENTUM_END, WEIGHT_DECAY, THRESHOLD
+from src.config import BATCH_SIZE, LEARNING_RATE, SEED, NUM_EPOCHS, PATIENCE, MOMENTUM_START, MOMENTUM_END, WEIGHT_DECAY, THRESHOLD, MODEL_NAME
 from src.consts import PAIRS_FILE, IMG_DIR, DEVICE
 from src.dataset import get_train_val_datasets
 from src.models.siamese_model import SiameseNetwork
@@ -34,9 +34,8 @@ def main():
     val_loader = DataLoader(
         val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
 
-    model = SiameseNetwork().to(DEVICE)
-    # model = SimpleSiameseNetwork().to(DEVICE)
-    init_weights(model)
+    print("Initializing ResNet Backbone...")
+    model = SiameseNetwork(backbone_name=MODEL_NAME, pretrained=True).to(DEVICE)
 
     criterion = get_loss_function()
     optimizer = get_optimizer(model, lr=LEARNING_RATE,
