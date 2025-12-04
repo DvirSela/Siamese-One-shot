@@ -13,7 +13,6 @@ class SiameseNetwork(nn.Module):
         super(SiameseNetwork, self).__init__()
         
         # 1. Load the Backbone
-        # We use the factory pattern to make swapping easy
         if backbone_name == 'resnet18':
             self.backbone = models.resnet18(weights='DEFAULT' if pretrained else None)
             in_features = self.backbone.fc.in_features # 512
@@ -26,9 +25,9 @@ class SiameseNetwork(nn.Module):
         else:
             raise ValueError(f"Backbone {backbone_name} not supported yet.")
 
-        # 2. Modify First Layer for Grayscale
-        # ResNet expects 3 channels (RGB). We have 1 (Grayscale).
-        # We replace conv1 with a 1-channel version.
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+
         original_conv1 = self.backbone.conv1
         self.backbone.conv1 = nn.Conv2d(
             in_channels=1, 
