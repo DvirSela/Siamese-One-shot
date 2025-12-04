@@ -83,7 +83,7 @@ def main():
             
             # If distance < threshold (1.0), we predict "Same" (1)
             # If distance > threshold, we predict "Different" (0)
-            predicted = (dist < threshold).float()
+            predicted = (dist < THRESHOLD).float()
             
             train_correct += (predicted == labels.squeeze()).sum().item()
             total_samples += img1.size(0)
