@@ -3,26 +3,17 @@ import torch
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as F
 
-
 class SiameseAffine:
-    """
-    Implements the paper's affine distortions:
-    1. Stochastically choose parameters (prob=0.5 for each).
-    2. Combine them into ONE transformation matrix.
-    3. Apply ONCE to prevent multiple interpolation blurs.
-    """
-
     def __init__(self):
-        self.prob = 0.5
-        # Rotation: [-10, 10] degrees
-        self.rot_limit = 10.0
-        # Shear: [-0.3, 0.3] radians is approx [-17.18, 17.18] degrees
-        self.shear_limit = 17.18
-        # Scale: [0.8, 1.2]
-        self.scale_range = (0.8, 1.2)
-        # Translation: [-2, 2] pixels (on 105x105).
-        # For 250x250, we use relative %: 2/105 approx 0.02
-        self.trans_limit = 0.02
+        self.prob = 0.5 # Kept prob 0.5 to not destroy too many images
+        # INCREASED ROTATION: 10 -> 20 degrees
+        self.rot_limit = 20.0 
+        # INCREASED SHEAR: ~17 -> ~25 degrees
+        self.shear_limit = 25.0
+        # INCREASED SCALE: 0.8-1.2 -> 0.7-1.3
+        self.scale_range = (0.7, 1.3)
+        # INCREASED TRANSLATION: 2% -> 5%
+        self.trans_limit = 0.05
 
     def __call__(self, img):
 

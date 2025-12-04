@@ -49,10 +49,28 @@ class ContrastiveLoss(nn.Module):
         )
 
         return loss_contrastive
-    
-def get_loss_function():
-    # Return the new Contrastive Loss
-    return ContrastiveLoss(margin=MARGIN)
+
+class TripletLoss(nn.Module):
+    def __init__(self, margin=1.0):
+        super(TripletLoss, self).__init__()
+        self.margin = margin
+        
+    def forward(self, anchor, positive, negative):
+        # Distance(A, P)
+        d_pos = F.pairwise_distance(anchor, positive)
+        # Distance(A, N)
+        d_neg = F.pairwise_distance(anchor, negative)
+        
+        # Loss = max(0, D_pos - D_neg + margin)
+        losses = torch.relu(d_pos - d_neg + self.margin)
+        
+        return losses.mean()
+
+def get_loss_function(type='contrastive'):
+    if type == 'triplet':
+        return TripletLoss(margin=1.0)
+    else:
+        return ContrastiveLoss(margin=1.0)
 
 
 
