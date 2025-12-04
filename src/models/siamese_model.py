@@ -2,8 +2,15 @@ import torch
 import torch.nn as nn
 from src.config import DROPOUT
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 class SiameseNetwork(nn.Module):
-    """Siamese Network architecture for face identification."""
+    """
+    Siamese Network for Contrastive Learning.
+    Outputs raw feature embeddings instead of probability scores.
+    """
     def __init__(self):
         super(SiameseNetwork, self).__init__()
 
@@ -33,33 +40,18 @@ class SiameseNetwork(nn.Module):
         self.fc = nn.Sequential(
             nn.Linear(256 * 6 * 6, 4096),
             nn.BatchNorm1d(4096),
-            nn.Sigmoid(),
-            nn.Dropout(p=DROPOUT)
+            nn.ReLU(inplace=True)
         )
 
-        self.out = nn.Linear(4096, 1)
-
-    def forward_once(self, x) -> torch.Tensor:
-        """
-        Forward pass for one branch of the Siamese Network.
-        Args:
-            x (Tensor): Input image tensor.
-        Returns:
-            Tensor: Output feature vector.
-        """
+    def forward_once(self, x):
         output = self.cnn(x)
-
-        # Pass through Adaptive Pool (Reduces 24x24 -> 6x6)
         output = self.adaptive_pool(output)
-
         output = output.view(output.size()[0], -1)
-
         output = self.fc(output)
+
         return output
 
     def forward(self, input1, input2):
         output1 = self.forward_once(input1)
         output2 = self.forward_once(input2)
-        l1_distance = torch.abs(output1 - output2)
-        score = torch.sigmoid(self.out(l1_distance))
-        return score
+        return output1, output2

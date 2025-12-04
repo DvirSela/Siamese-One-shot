@@ -8,43 +8,35 @@ import numpy as np
 from sklearn.metrics import roc_curve, auc
 import seaborn as sns
 
-from src.config import BATCH_SIZE, SEED
+from src.config import BATCH_SIZE, SEED, THRESHOLD
 from src.consts import IMG_DIR, DEVICE, TEST_PAIRS_FILE, MODEL_PATH
 from src.dataset import SiameseDataset, parse_lfw_pairs
 from src.models.siamese_model import SiameseNetwork
 from src.utils import set_seed
 from src.transforms import get_transforms
 
-
-def validate(model, val_loader, criterion) -> Tuple[float, float]:
-    """
-    Validate the model on the validation dataset.
-    Args:
-        model (nn.Module): The Siamese Network model.
-        val_loader (DataLoader): DataLoader for validation data.
-        criterion: Loss function.
-    Returns:
-        Tuple[float, float]: Average loss and accuracy on validation set.
-    """
+def validate(model, val_loader, criterion):
     model.eval()
     total_loss = 0.0
     total_correct = 0
     total_samples = 0
-
+    threshold = THRESHOLD
+    
     with torch.no_grad():
         for img1, img2, labels in val_loader:
-            img1, img2, labels = img1.to(DEVICE), img2.to(
-                DEVICE), labels.to(DEVICE).unsqueeze(1)
-
-            outputs = model(img1, img2)
-            loss = criterion(outputs, labels)
-
+            img1, img2, labels = img1.to(DEVICE), img2.to(DEVICE), labels.to(DEVICE)
+            
+            v1, v2 = model(img1, img2)
+            loss = criterion(v1, v2, labels.squeeze())
+            
             total_loss += loss.item() * img1.size(0)
-
-            predicted = (outputs > 0.5).float()
-            total_correct += (predicted == labels).sum().item()
+            
+            dist = torch.nn.functional.pairwise_distance(v1, v2)
+            predicted = (dist < threshold).float()
+            
+            total_correct += (predicted == labels.squeeze()).sum().item()
             total_samples += img1.size(0)
-
+            
     avg_loss = total_loss / total_samples
     avg_acc = total_correct / total_samples
     return avg_loss, avg_acc

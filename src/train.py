@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from src.config import BATCH_SIZE, LEARNING_RATE, SEED, NUM_EPOCHS, PATIENCE, MOMENTUM_START, MOMENTUM_END, WEIGHT_DECAY
+from src.config import BATCH_SIZE, LEARNING_RATE, SEED, NUM_EPOCHS, PATIENCE, MOMENTUM_START, MOMENTUM_END, WEIGHT_DECAY, THRESHOLD
 from src.consts import PAIRS_FILE, IMG_DIR, DEVICE
 from src.dataset import get_train_val_datasets
 from src.models.siamese_model import SiameseNetwork
@@ -53,8 +53,7 @@ def main():
         f"Starting Training for {NUM_EPOCHS} epochs with patience {PATIENCE}")
 
     for epoch in tqdm(range(NUM_EPOCHS)):
-        curr_momentum = adjust_momentum(
-            optimizer, epoch, NUM_EPOCHS, MOMENTUM_END)
+        curr_momentum = adjust_momentum(optimizer, epoch, NUM_EPOCHS, MOMENTUM_END)
 
         model.train()
         train_loss = 0.0
@@ -62,23 +61,38 @@ def main():
         total_samples = 0
 
         for i, (img1, img2, labels) in enumerate(train_loader):
-            img1, img2, labels = img1.to(DEVICE), img2.to(
-                DEVICE), labels.to(DEVICE).unsqueeze(1)
+            img1, img2, labels = img1.to(DEVICE), img2.to(DEVICE), labels.to(DEVICE)
 
             optimizer.zero_grad()
-            outputs = model(img1, img2)
-            loss = criterion(outputs, labels)
+            
+            # 1. Forward Pass (Get Vectors)
+            v1, v2 = model(img1, img2)
+            
+            # 2. Calculate Loss
+            # Note: labels need to be squeezed to match shape if necessary
+            loss = criterion(v1, v2, labels.squeeze())
             loss.backward()
             optimizer.step()
 
+            # 3. Accumulate Train Loss (CRITICAL STEP)
             train_loss += loss.item() * img1.size(0)
-            predicted = (outputs > 0.5).float()
-            train_correct += (predicted == labels).sum().item()
+
+            # 4. Calculate Accuracy (Manual Thresholding)
+            # Contrastive loss doesn't output probabilities, so we check distance.
+            dist = torch.nn.functional.pairwise_distance(v1, v2)
+            
+            # If distance < threshold (1.0), we predict "Same" (1)
+            # If distance > threshold, we predict "Different" (0)
+            predicted = (dist < threshold).float()
+            
+            train_correct += (predicted == labels.squeeze()).sum().item()
             total_samples += img1.size(0)
 
+        # Calculate Averages
         avg_train_loss = train_loss / total_samples
         avg_train_acc = train_correct / total_samples
 
+        # Validation (Make sure validate() is also updated to use distance!)
         val_loss, val_acc = validate(model, val_loader, criterion)
 
         writer.add_scalar('Loss/Train', avg_train_loss, epoch)

@@ -1,8 +1,10 @@
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR
+import torch.nn.functional as F
+import torch
 
-
+from src.config import MARGIN
 def init_weights(model):
     """
     Applies the specific weight initialization from the Siamese Paper.
@@ -24,13 +26,34 @@ def init_weights(model):
 
     print("Weights initialized according to paper specifications.")
 
+class ContrastiveLoss(nn.Module):
+    """
+    Contrastive loss function.
+    Based on: http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
+    """
+    def __init__(self, margin=2.0):
+        super(ContrastiveLoss, self).__init__()
+        self.margin = margin
 
+    def forward(self, output1, output2, label):
+        euclidean_distance = F.pairwise_distance(output1, output2)
+
+        # Contrastive Loss Formula:
+        # If Label=1 (Same): Loss = distance^2
+        # If Label=0 (Diff): Loss = max(0, margin - distance)^2
+        # Note: We assume label is 1 for Same, 0 for Diff.
+        
+        loss_contrastive = torch.mean(
+            (label) * torch.pow(euclidean_distance, 2) +
+            (1 - label) * torch.pow(torch.clamp(self.margin - euclidean_distance, min=0.0), 2)
+        )
+
+        return loss_contrastive
+    
 def get_loss_function():
-    """
-    Paper: 'Regularized cross-entropy objective'
-    Note: The L2 regularization (lambda) is handled in the optimizer.
-    """
-    return nn.BCELoss()
+    # Return the new Contrastive Loss
+    return ContrastiveLoss(margin=MARGIN)
+
 
 
 def get_optimizer(model, lr=0.001, momentum=0.5, weight_decay=0.0001):
