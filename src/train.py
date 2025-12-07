@@ -41,7 +41,7 @@ def main():
     model = SiameseNetwork(backbone_name=MODEL_NAME, pretrained=True).to(DEVICE)
 
     # OHEM Loss
-    criterion_train = get_loss_function(type='ohem')
+    criterion_train = get_loss_function(loss_type='ohem')
     # Pairwise Validation Loss
     criterion_val = ContrastiveLoss(margin=1.0) 
 
