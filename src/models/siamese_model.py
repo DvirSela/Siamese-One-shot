@@ -57,7 +57,6 @@ class SiameseNetwork(nn.Module):
     def forward_once(self, x):
         features = self.backbone(x)
         embeddings = self.fc(features)
-        embeddings = F.normalize(embeddings, p=2, dim=1)
         return embeddings
 
     def forward(self, input1, input2):
