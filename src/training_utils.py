@@ -91,54 +91,49 @@ class TripletCosineLoss(nn.Module):
 
         return losses.mean()
 
-
 class BatchHardTripletLoss(nn.Module):
-    def __init__(self, margin=0.2):  # Typically lower margin for Cosine
+    def __init__(self, margin=0.2):
         super(BatchHardTripletLoss, self).__init__()
         self.margin = margin
 
     def forward(self, embeddings, labels):
         """
-        embeddings: (Batch, Embed_Dim)
+        embeddings: (Batch, Embed_Dim) - ASSUMES ALREADY NORMALIZED
         labels: (Batch,)
         """
-        # 1. Compute Pairwise Distance Matrix (Cosine Distance)
-        # Cosine Distance = 1 - Cosine Similarity
-        # Matrix calculation: D[i,j]
-
-        # Normalize embeddings first (if not already)
-        embeddings = F.normalize(embeddings, p=2, dim=1)
-
-        # Similarity Matrix (Batch x Batch)
-        sim_matrix = torch.mm(embeddings, embeddings.t())
-        dist_matrix = 1 - sim_matrix
-
-        # 2. Get Hardest Positive (Max Distance)
-        # Mask where labels[i] == labels[j] (Same Identity)
+        # 1. Similarity Matrix (Batch x Batch)
+        # Cosine Similarity: -1 to 1
+        sim_matrix = torch.mm(embeddings, embeddings.t()) 
+        
+        # Cosine Distance: 0 to 2
+        # Ensure numerical stability (clamp)
+        sim_matrix = torch.clamp(sim_matrix, min=-1.0 + 1e-7, max=1.0 - 1e-7)
+        dist_matrix = 1.0 - sim_matrix
+        
+        # 2. Hardest Positive (Max Distance)
         labels = labels.unsqueeze(1)
         mask_pos = (labels == labels.t()).bool()
-
-        # We want max distance for positive pairs.
-        # But we must ignore the diagonal (dist to self is 0)
-        # Strategy: Fill non-positive entries with -1 (so they aren't max)
-        # Note: dist_matrix is >= 0
+        
+        # Fill non-positive entries with -1 so they aren't picked as max
+        # (Distances are always >= 0)
+        # We subtract a small epsilon from dist_matrix to ensure we don't pick diagonal (0)
+        # unless it's the only option, but diagonal is always 0.
+        
+        # Shape: (Batch, 1)
         hardest_pos_dist = (dist_matrix * mask_pos.float()).max(dim=1)[0]
-
-        # 3. Get Hardest Negative (Min Distance)
-        # Mask where labels[i] != labels[j] (Diff Identity)
+        
+        # 3. Hardest Negative (Min Distance)
         mask_neg = (labels != labels.t()).bool()
-
-        # We want min distance.
-        # Strategy: Add max_dist to non-negative entries so they aren't picked as min
-        max_val = dist_matrix.max()
-        hardest_neg_dist = (dist_matrix + (~mask_neg).float()
-                            * max_val).min(dim=1)[0]
-
+        
+        # Fill non-negative entries with a large value (e.g., 2.0 is max possible dist)
+        # We use 10.0 to be safe.
+        max_dist_val = 10.0
+        hardest_neg_dist = (dist_matrix + (~mask_neg).float() * max_dist_val).min(dim=1)[0]
+        
         # 4. Compute Loss
-        # Loss = ReLU(Hardest_Pos - Hardest_Neg + Margin)
-        loss = torch.mean(torch.relu(hardest_pos_dist -
-                          hardest_neg_dist + self.margin))
-
+        # Loss = mean( ReLU(Hardest_Pos - Hardest_Neg + Margin) )
+        loss = torch.mean(torch.relu(hardest_pos_dist - hardest_neg_dist + self.margin))
+        
         return loss
 
 
