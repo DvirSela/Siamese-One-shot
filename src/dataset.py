@@ -1,13 +1,140 @@
 import os
 import random
 from typing import List, Tuple
+from collections import defaultdict
 
+import numpy as np
 import torch
+from torch.utils.data.sampler import Sampler
+from torch.utils.data import Dataset
 from PIL import Image
 from sklearn.model_selection import train_test_split
-from torch.utils.data import Dataset
 
 from src.consts import SAME_PERSON_LABEL, DIFFERENT_PERSON_LABEL
+
+
+
+class LabeledDataset(Dataset):
+    """
+    Returns individual images with their person ID (label).
+    Used for Batch Hard Training.
+    """
+    def __init__(self, pairs, img_dir, transform=None):
+        self.img_dir = img_dir
+        self.transform = transform
+        
+        # 1. Build Dictionary: Name -> List of Images
+        self.people_dict = defaultdict(list)
+        for p1, p2 in pairs:
+            name1 = os.path.basename(os.path.dirname(p1))
+            name2 = os.path.basename(os.path.dirname(p2))
+            self.people_dict[name1].append(p1)
+            self.people_dict[name2].append(p2)
+            
+        # Deduplicate
+        for name in self.people_dict:
+            self.people_dict[name] = list(set(self.people_dict[name]))
+            
+        # 2. Assign Integer IDs to names
+        # Filter for people with at least K=2 images
+        self.valid_names = [n for n in self.people_dict.keys() if len(self.people_dict[n]) >= 2]
+        self.name_to_id = {name: i for i, name in enumerate(self.valid_names)}
+        
+        # 3. Flatten to List of (Image, LabelID)
+        self.data = []
+        for name in self.valid_names:
+            label = self.name_to_id[name]
+            for img_path in self.people_dict[name]:
+                self.data.append((img_path, label))
+                
+    def __getitem__(self, index):
+        img_path, label = self.data[index]
+        img = Image.open(img_path).convert("L")
+        if self.transform:
+            img = self.transform(img)
+        return img, label
+
+    def __len__(self):
+        return len(self.data)
+
+class PKSampler(Sampler):
+    """
+    Randomly samples batches ensuring P identities with K images each.
+    """
+    def __init__(self, dataset, p=8, k=4):
+        self.dataset = dataset
+        self.p = p # Number of people per batch
+        self.k = k # Number of images per person
+        self.batch_size = p * k
+        
+        # Organize indices by label
+        self.label_to_indices = defaultdict(list)
+        for idx, (_, label) in enumerate(dataset.data):
+            self.label_to_indices[label].append(idx)
+            
+        # Valid labels (must have at least K images)
+        self.labels = list(self.label_to_indices.keys())
+        
+        # Calculate length roughly
+        self.num_batches = len(dataset) // self.batch_size
+
+    def __iter__(self):
+        for _ in range(self.num_batches):
+            # 1. Pick P random people
+            selected_labels = random.sample(self.labels, self.p)
+            
+            batch_indices = []
+            for label in selected_labels:
+                # 2. Pick K random images for each person
+                # (Use replacement if a person has fewer than K images, though we filtered for >=2)
+                indices = self.label_to_indices[label]
+                if len(indices) >= self.k:
+                    selected = random.sample(indices, self.k)
+                else:
+                    selected = np.random.choice(indices, self.k, replace=True).tolist()
+                batch_indices.extend(selected)
+                
+            yield batch_indices
+
+    def __len__(self):
+        return self.num_batches
+
+# UPDATE FACTORY
+def get_ohem_dataloaders(pairs_file, img_dir, val_size=0.2, transform_train=None, transform_val=None, p=8, k=4):
+    print("Parsing and Splitting Data for OHEM...")
+    all_train_pairs, all_train_labels = parse_lfw_pairs(pairs_file, img_dir)
+
+    # 1. Leak-Free Split
+    (train_pairs, train_labels), (val_pairs, val_labels) = split_pairs_by_identity(
+        all_train_pairs, all_train_labels, val_size=val_size
+    )
+    
+    # 2. Create OHEM Train Dataset (Labeled)
+    print("Creating Labeled Train Dataset...")
+    train_dataset = LabeledDataset(train_pairs, img_dir, transform=transform_train)
+    
+    # 3. Create Sampler
+    train_sampler = PKSampler(train_dataset, p=p, k=k)
+    
+    # 4. Validation remains Pair-based (Standard Metric)
+    # We still need to balance it!
+    val_pos = sum(val_labels)
+    val_neg = len(val_labels) - val_pos
+    if val_pos > val_neg:
+        needed = int(val_pos - val_neg)
+        val_names_set = set()
+        for p1, p2 in val_pairs:
+            val_names_set.add(os.path.basename(os.path.dirname(p1)))
+            val_names_set.add(os.path.basename(os.path.dirname(p2)))
+        new_p, new_l = generate_new_negatives(list(val_names_set), needed, img_dir)
+        val_pairs.extend(new_p)
+        val_labels.extend(new_l)
+        
+    val_dataset = SiameseDataset(val_pairs, val_labels, transform=transform_val)
+
+    return train_dataset, train_sampler, val_dataset
+
+
 
 
 def parse_lfw_pairs(pairs_filepath, img_dir_path) -> Tuple[List[Tuple[str, str]], List[int]]:

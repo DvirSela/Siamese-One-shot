@@ -7,7 +7,7 @@ from tqdm import tqdm
 from src.config import BATCH_SIZE, LEARNING_RATE, SEED, NUM_EPOCHS, PATIENCE, MOMENTUM_START, MOMENTUM_END, WEIGHT_DECAY, MODEL_NAME
 from src.consts import PAIRS_FILE, IMG_DIR, DEVICE
 
-from src.dataset import get_dataloaders 
+from src.dataset import get_dataloaders, get_ohem_dataloaders
 from src.models.siamese_model import SiameseNetwork
 from src.training_utils import get_optimizer, get_loss_function, get_lr_scheduler, adjust_momentum, ContrastiveLoss
 from src.utils import set_seed
@@ -17,31 +17,35 @@ from src.evaluate import validate
 def main():
     set_seed(SEED)
     print(f"Running on: {DEVICE}")
-    print(f'Training with Triplet Loss')
+    print(f'Training with OHEM (Batch Hard)')
 
-    # Single call to get both datasets safely
-    train_dataset, val_dataset = get_dataloaders(
+    # CONFIG FOR OHEM
+    P_PEOPLE = 8
+    K_IMAGES = 4
+    BATCH_SIZE = P_PEOPLE * K_IMAGES # 32
+
+    # Get Data with Sampler
+    train_dataset, train_sampler, val_dataset = get_ohem_dataloaders(
         PAIRS_FILE, IMG_DIR,
         val_size=0.2,
         transform_train=get_transforms(is_train=True),
         transform_val=get_transforms(is_train=False),
-        use_triplet=True # Enable Triplet Mode for Training
+        p=P_PEOPLE, k=K_IMAGES
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
+    # Train Loader needs the SAMPLER (Shuffle must be False when using Sampler)
+    train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=2)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=2)
 
-    print("Initializing ResNet Backbone...")
+    print("Initializing Backbone...")
     model = SiameseNetwork(backbone_name=MODEL_NAME, pretrained=True).to(DEVICE)
 
-    # Triplet Loss for Training
-    criterion_train = get_loss_function(loss_type='triplet_cosine')
-    
-    # Contrastive Loss for Validation (since Val is pairs)
+    # OHEM Loss
+    criterion_train = get_loss_function(type='ohem')
+    # Pairwise Validation Loss
     criterion_val = ContrastiveLoss(margin=1.0) 
 
-    optimizer = get_optimizer(model, lr=LEARNING_RATE,
-                              momentum=MOMENTUM_START, weight_decay=WEIGHT_DECAY)
+    optimizer = get_optimizer(model, lr=LEARNING_RATE, momentum=MOMENTUM_START, weight_decay=WEIGHT_DECAY)
     scheduler = get_lr_scheduler(optimizer)
 
     writer = SummaryWriter('runs/siamese_experiment')
@@ -59,31 +63,26 @@ def main():
         train_loss = 0.0
         total_samples = 0
 
-        # TRIPLET LOOP
-        for i, (anchor, pos, neg) in enumerate(train_loader):
-            anchor, pos, neg = anchor.to(DEVICE), pos.to(DEVICE), neg.to(DEVICE)
+        for i, (images, labels) in enumerate(train_loader):
+            images, labels = images.to(DEVICE), labels.to(DEVICE)
             
             optimizer.zero_grad()
             
-            # Forward 3 times
-            v_a = model.forward_once(anchor)
-            v_p = model.forward_once(pos)
-            v_n = model.forward_once(neg)
+            # Forward once (Get embeddings for whole batch)
+            embeddings = model.forward_once(images)
             
-            # Calculate Triplet Loss
-            loss = criterion_train(v_a, v_p, v_n)
+            # Loss handles the mining internally
+            loss = criterion_train(embeddings, labels)
             
             loss.backward()
             optimizer.step()
             
-            # Accumulate Loss
-            train_loss += loss.item() * anchor.size(0)
-            total_samples += anchor.size(0)
+            train_loss += loss.item() * images.size(0)
+            total_samples += images.size(0)
 
         avg_train_loss = train_loss / total_samples
-        
-        # Validation (Pairwise Metric)
-        # We pass criterion_val (Contrastive) because validation data is pairs
+
+        # Validation
         val_loss, val_acc = validate(model, val_loader, criterion=criterion_val)        
         
         writer.add_scalar('Loss/Train', avg_train_loss, epoch)
