@@ -252,10 +252,8 @@ def get_dataloaders(pairs_file, img_dir, val_size=0.2, transform_train=None, tra
     
     print(f"Final Split: Train {len(train_pairs)} pairs | Val {len(val_pairs)} pairs")
 
-    # 4. Create Datasets
     if use_triplet:
         print("Creating Triplet Train Dataset...")
-        # We pass the SPLIT pairs. The dataset class uses them to find valid people.
         train_dataset = TripletSiameseDataset(train_pairs, img_dir, transform=transform_train)
     else:
         train_dataset = SiameseDataset(train_pairs, train_labels, transform=transform_train)
