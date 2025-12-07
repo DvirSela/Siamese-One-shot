@@ -13,6 +13,9 @@ from src.models.siamese_model import SiameseNetwork
 from src.utils import set_seed
 from src.transforms import get_transforms
 
+def calculate_metric(v1, v2):
+    # 1 - Cosine Similarity
+    return 1 - F.cosine_similarity(v1, v2, dim=1)
 
 def validate(model, val_loader, criterion):
     """
@@ -38,7 +41,7 @@ def validate(model, val_loader, criterion):
             loss = criterion(v1, v2, labels.squeeze())
             total_loss += loss.item() * img1.size(0)
 
-            dist = torch.nn.functional.pairwise_distance(v1, v2)
+            dist = calculate_metric(v1, v2)
             predicted = (dist < threshold).float()
 
             total_correct += (predicted == labels.squeeze()).sum().item()
@@ -164,7 +167,7 @@ def evaluate():
         test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     print("Loading Model...")
-    # model = SiameseNetwork().to(DEVICE)
+
     model = SiameseNetwork(backbone_name=MODEL_NAME,
                            pretrained=False).to(DEVICE)
     if os.path.exists(MODEL_PATH):
@@ -185,11 +188,8 @@ def evaluate():
             img1, img2, labels = img1.to(DEVICE), img2.to(
                 DEVICE), labels.to(DEVICE).unsqueeze(1)
 
-            # Get Vectors
             v1, v2 = model(img1, img2)
-
-            # Calculate Distance (Euclidean)
-            dists = F.pairwise_distance(v1, v2)
+            dists = calculate_metric(v1, v2)
 
             all_dists.extend(dists.cpu().numpy())
             all_labels.extend(labels.cpu().numpy().flatten())

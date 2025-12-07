@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 from torchvision import models
 
 class SiameseNetwork(nn.Module):
@@ -11,8 +12,8 @@ class SiameseNetwork(nn.Module):
             pretrained (bool): Whether to load ImageNet weights.
         """
         super(SiameseNetwork, self).__init__()
-        
-        # 1. Load the Backbone
+        self.backbone_name = backbone_name
+
         if backbone_name == 'resnet18':
             self.backbone = models.resnet18(weights='DEFAULT' if pretrained else None)
             in_features = self.backbone.fc.in_features # 512
@@ -43,28 +44,20 @@ class SiameseNetwork(nn.Module):
         with torch.no_grad():
             self.backbone.conv1.weight.data = original_conv1.weight.data.mean(dim=1, keepdim=True)
 
-        # 3. Remove the Classification Head (fc)
-        # We replace the final 'fc' layer with a simple Identity, 
-        # so we get the raw feature vector from the Global Average Pooling layer.
+
         self.backbone.fc = nn.Identity()
 
-        # 4. Projection / Embedding Head
-        # Projects high-dim features to your desired embedding size
+        # Projection / Embedding Head
         self.fc = nn.Sequential(
             nn.Linear(in_features, 512),
             nn.BatchNorm1d(512),
-            nn.ReLU(inplace=True)
-            # No Dropout needed here for ResNet usually, BN handles it
+            # nn.ReLU(inplace=True)
         )
 
     def forward_once(self, x):
-        # Pass through ResNet backbone
-        # Output shape: (Batch, in_features) e.g., (Batch, 512)
         features = self.backbone(x)
-        
-        # Pass through projection head
         embeddings = self.fc(features)
-        
+        embeddings = F.normalize(embeddings, p=2, dim=1)
         return embeddings
 
     def forward(self, input1, input2):

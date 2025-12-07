@@ -8,6 +8,6 @@ MOMENTUM_END = 0.9
 DROPOUT = 0.1
 WEIGHT_DECAY = 0.01
 MODEL_NAME = 'resnet18'
-# contrastive loss margin
-MARGIN = 2.0
-THRESHOLD = 12.0
+
+MARGIN = 0.2
+THRESHOLD = 0.5

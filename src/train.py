@@ -35,7 +35,7 @@ def main():
     model = SiameseNetwork(backbone_name=MODEL_NAME, pretrained=True).to(DEVICE)
 
     # Triplet Loss for Training
-    criterion_train = get_loss_function(type='triplet')
+    criterion_train = get_loss_function(type='triplet_cosine')
     
     # Contrastive Loss for Validation (since Val is pairs)
     criterion_val = ContrastiveLoss(margin=1.0) 

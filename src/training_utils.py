@@ -66,13 +66,42 @@ class TripletLoss(nn.Module):
         
         return losses.mean()
 
-def get_loss_function(type='contrastive'):
-    if type == 'triplet':
+class TripletCosineLoss(nn.Module):
+    def __init__(self, margin=0.2):
+        super(TripletCosineLoss, self).__init__()
+        self.margin = margin
+        
+    def forward(self, anchor, positive, negative):
+        # Cosine Similarity is between -1 and 1.
+        # We want "Cosine Distance" where 0 is same, 2 is opposite.
+        # Dist = 1 - Similarity
+        
+        d_pos = 1 - F.cosine_similarity(anchor, positive, dim=1)
+        d_neg = 1 - F.cosine_similarity(anchor, negative, dim=1)
+        
+        # Loss = max(0, D_pos - D_neg + margin)
+        losses = torch.relu(d_pos - d_neg + self.margin)
+        
+        return losses.mean()
+
+def get_loss_function(loss_type='triplet_cosine') -> nn.Module:
+    """
+    Returns the specified loss function.
+    Args:
+        loss_type (str): 'triplet', 'contrastive', 'triplet_cosine'
+    Raises:
+        ValueError: If loss_type is not recognized.
+    Returns:
+        nn.Module: Loss function instance.
+    """
+    if loss_type == 'triplet':
         return TripletLoss(margin=1.0)
-    else:
+    elif loss_type == 'contrastive':
         return ContrastiveLoss(margin=1.0)
-
-
+    elif loss_type == 'triplet_cosine':
+        return TripletCosineLoss(margin=MARGIN)
+    else:
+        raise ValueError(f"Loss type {loss_type} not recognized.")
 
 def get_optimizer(model, lr=0.001, momentum=0.5, weight_decay=0.0001):
     """
