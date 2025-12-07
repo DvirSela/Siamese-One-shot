@@ -1,4 +1,4 @@
-BATCH_SIZE = 32 # (16 people * 2 images)
+BATCH_SIZE = 32
 NUM_EPOCHS = 200
 LEARNING_RATE = 0.0005
 SEED = 42
@@ -9,6 +9,6 @@ DROPOUT = 0.0
 WEIGHT_DECAY = 0.0001
 MODEL_NAME = 'resnet18'
 
-# Euclidean settings
+# Euclidean Margin for OHEM
 MARGIN = 1.0 
-THRESHOLD = 12.0 
+THRESHOLD = 10.0 # Placeholder

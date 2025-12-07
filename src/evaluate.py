@@ -41,7 +41,7 @@ def validate(model, val_loader, criterion):
             loss = criterion(v1, v2, labels.squeeze())
             total_loss += loss.item() * img1.size(0)
 
-            dist = calculate_metric(v1, v2)
+            dist = torch.nn.functional.pairwise_distance(v1, v2)
             predicted = (dist < threshold).float()
 
             total_correct += (predicted == labels.squeeze()).sum().item()
@@ -189,7 +189,7 @@ def evaluate():
                 DEVICE), labels.to(DEVICE).unsqueeze(1)
 
             v1, v2 = model(img1, img2)
-            dists = calculate_metric(v1, v2)
+            dists = F.pairwise_distance(v1, v2)
 
             all_dists.extend(dists.cpu().numpy())
             all_labels.extend(labels.cpu().numpy().flatten())
