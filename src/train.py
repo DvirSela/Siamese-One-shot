@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from src.config import LEARNING_RATE, SEED, NUM_EPOCHS, PATIENCE, MOMENTUM_START, MOMENTUM_END, WEIGHT_DECAY, MODEL_NAME, P_PEOPLE, K_IMAGES
+from src.config import LEARNING_RATE, SEED, NUM_EPOCHS, PATIENCE, MOMENTUM_START, MOMENTUM_END, WEIGHT_DECAY, MODEL_NAME, P_PEOPLE, K_IMAGES, OPTIMIZER
 from src.consts import PAIRS_FILE, IMG_DIR, DEVICE
 
 from src.dataset import get_dataloaders, get_ohem_dataloaders
@@ -39,7 +39,7 @@ def main():
     # Pairwise Validation Loss
     criterion_val = ContrastiveLoss(margin=1.0) 
 
-    optimizer = get_optimizer(model, lr=LEARNING_RATE, momentum=MOMENTUM_START, weight_decay=WEIGHT_DECAY)
+    optimizer = get_optimizer(model, lr=LEARNING_RATE, momentum=MOMENTUM_START, weight_decay=WEIGHT_DECAY, optimizer_name=OPTIMIZER)
     scheduler = get_lr_scheduler(optimizer)
 
     writer = SummaryWriter('runs/siamese_experiment')

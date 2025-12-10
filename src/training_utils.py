@@ -159,20 +159,30 @@ def get_loss_function(loss_type='triplet_cosine') -> nn.Module:
         raise ValueError(f"Loss type {loss_type} not recognized.")
 
 
-def get_optimizer(model, lr=0.001, momentum=0.5, weight_decay=0.0001):
+def get_optimizer(model: nn.Module, optimizer_name: str, lr: float = 0.01, momentum: float = 0.5, weight_decay: float = 1e-4) -> optim.Optimizer:
     """
     Paper: SGD with momentum and L2 regularization.
 
     Args:
         model: PyTorch model
         lr: learning rate
+        optimizer: Optimizer type. A string, e.g., 'SGD'
         momentum: Initial momentum (paper starts at 0.5)
         weight_decay: This is the lambda parameter from the paper's loss equation.
+    Returns:
+        optimizer: Configured SGD optimizer
     """
-    optimizer = optim.SGD(model.parameters(),
-                          lr=lr,
-                          momentum=momentum,
-                          weight_decay=weight_decay)
+    if optimizer_name == 'SGD':
+        optimizer = optim.SGD(model.parameters(),
+                            lr=lr,
+                            momentum=momentum,
+                            weight_decay=weight_decay)
+    elif optimizer_name == 'Adam':
+        optimizer = optim.Adam(model.parameters(),
+                             lr=lr,
+                             weight_decay=weight_decay)
+    else:
+        raise ValueError(f"Optimizer {optimizer_name} not recognized.")
     return optimizer
 
 

@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 # Import your existing modules
 from src.consts import PAIRS_FILE, IMG_DIR, DEVICE
+from src.config import OPTIMIZER
 from src.dataset import get_ohem_dataloaders
 from src.models.siamese_model import SiameseNetwork
 from src.training_utils import get_optimizer, get_loss_function, get_lr_scheduler, adjust_momentum, ContrastiveLoss
@@ -52,7 +53,7 @@ def objective(trial):
     criterion_train = BatchHardTripletLoss(margin=margin)
     criterion_val = ContrastiveLoss(margin=margin) # Use same margin for consistency logic
     
-    optimizer = get_optimizer(model, lr=lr, momentum=0.9, weight_decay=weight_decay)
+    optimizer = get_optimizer(model, lr=lr, momentum=0.9, weight_decay=weight_decay, optimizer_name=OPTIMIZER)
     scheduler = get_lr_scheduler(optimizer)
     
     # --- 3. Training Loop (Shortened) ---
