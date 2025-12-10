@@ -7,7 +7,7 @@ MOMENTUM_START = 0.9
 MOMENTUM_END = 0.9
 DROPOUT = 0.0 
 WEIGHT_DECAY = 0.0001
-MODEL_NAME = 'resnet18'
+MODEL_NAME = 'vit_b_16'
 
 # Euclidean Margin for OHEM
 MARGIN = 1.0 
