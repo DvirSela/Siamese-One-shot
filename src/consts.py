@@ -8,4 +8,4 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Test
 TEST_PAIRS_FILE = './data/pairsDevTest.txt'
-MODEL_PATH = './models/best tuned.pth'
+MODEL_PATH = './best_model.pth'
