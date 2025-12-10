@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from src.config import BATCH_SIZE, LEARNING_RATE, SEED, NUM_EPOCHS, PATIENCE, MOMENTUM_START, MOMENTUM_END, WEIGHT_DECAY, MODEL_NAME
+from src.config import LEARNING_RATE, SEED, NUM_EPOCHS, PATIENCE, MOMENTUM_START, MOMENTUM_END, WEIGHT_DECAY, MODEL_NAME, P_PEOPLE, K_IMAGES
 from src.consts import PAIRS_FILE, IMG_DIR, DEVICE
 
 from src.dataset import get_dataloaders, get_ohem_dataloaders
@@ -19,12 +19,6 @@ def main():
     print(f"Running on: {DEVICE}")
     print(f'Training with OHEM (Batch Hard)')
 
-    # CONFIG FOR OHEM
-    P_PEOPLE = 8
-    K_IMAGES = 4
-    BATCH_SIZE = P_PEOPLE * K_IMAGES # 32
-
-    # Get Data with Sampler
     train_dataset, train_sampler, val_dataset = get_ohem_dataloaders(
         PAIRS_FILE, IMG_DIR,
         val_size=0.2,

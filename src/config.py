@@ -12,3 +12,7 @@ MODEL_NAME = 'resnet18'
 # Euclidean Margin for OHEM
 MARGIN = 1.0 
 THRESHOLD = 10.0 # Placeholder
+
+# tuned
+P_PEOPLE = 8
+K_IMAGES = 4
