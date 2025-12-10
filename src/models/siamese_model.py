@@ -14,15 +14,18 @@ class SiameseNetwork(nn.Module):
         super(SiameseNetwork, self).__init__()
         self.backbone_name = backbone_name
 
-        if backbone_name == 'resnet18':
-            self.backbone = models.resnet18(weights='DEFAULT' if pretrained else None)
-            in_features = self.backbone.fc.in_features # 512
-        elif backbone_name == 'resnet34':
-            self.backbone = models.resnet34(weights='DEFAULT' if pretrained else None)
-            in_features = self.backbone.fc.in_features # 512
-        elif backbone_name == 'resnet50':
-            self.backbone = models.resnet50(weights='DEFAULT' if pretrained else None)
-            in_features = self.backbone.fc.in_features # 2048
+        # CNN-based 
+        if backbone_name in ['resnet18', 'resnet34', 'resnet50']:
+            self.backbone = getattr(models, backbone_name)(weights='DEFAULT' if pretrained else None)
+            in_features = self.backbone.fc.in_features
+        # mobile net-based
+        elif backbone_name in ['mobilenet_v2', 'mobilenet_v3_small', 'mobilenet_v3_large']:
+            self.backbone = getattr(models, backbone_name)(weights='DEFAULT' if pretrained else None)
+            in_features = self.backbone.classifier[-1].in_features
+        # ViT based
+        elif backbone_name in ['vit_b_16', 'vit_b_32', 'vit_l_16', 'vit_l_32']:
+            self.backbone = getattr(models, backbone_name)(weights='DEFAULT' if pretrained else None)
+            in_features = self.backbone.heads[-1].in_features
         else:
             raise ValueError(f"Backbone {backbone_name} not supported yet.")
 
