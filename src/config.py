@@ -11,8 +11,8 @@ MODEL_NAME = 'vit_b_32'
 OPTIMIZER = 'Adam'
 
 # Euclidean Margin for OHEM
-MARGIN = 1.0 
-THRESHOLD = 10.0 # Placeholder
+MARGIN = 1.6
+THRESHOLD = 13
 
 # tuned
 P_PEOPLE = 8
