@@ -19,7 +19,6 @@ def objective(trial):
     margin = trial.suggest_float("margin", 0.5, 2.0, step=0.1)
     weight_decay = trial.suggest_float("weight_decay", 1e-5, 1e-3, log=True)
     
-    # Sampler Strategy (Total Batch Size 32)
     sampler_mode = trial.suggest_categorical("sampler_mode", ["8x4", "16x2"])
     
     if sampler_mode == "8x4":
@@ -27,7 +26,6 @@ def objective(trial):
     else:
         p_people, k_images = 16, 2
         
-    # Setup Data & Model
     train_dataset, train_sampler, val_dataset = get_ohem_dataloaders(
         PAIRS_FILE, IMG_DIR,
         val_size=0.2,
@@ -39,7 +37,6 @@ def objective(trial):
     train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=2)
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=2)
     
-    # Use MODEL_NAME from config so it supports ViT or ResNet dynamically
     model = SiameseNetwork(backbone_name=MODEL_NAME, pretrained=True).to(DEVICE)
     
     criterion_train = BatchHardTripletLoss(margin=margin)
@@ -48,28 +45,28 @@ def objective(trial):
     optimizer = get_optimizer(model, lr=lr, momentum=0.9, weight_decay=weight_decay, optimizer_name=OPTIMIZER)
     scheduler = get_lr_scheduler(optimizer)
     
-    MAX_TUNE_EPOCHS = 100
+    MAX_TUNE_EPOCHS = 30
     best_val_acc = 0.0
     
     for epoch in range(MAX_TUNE_EPOCHS):
         curr_momentum = adjust_momentum(optimizer, epoch, MAX_TUNE_EPOCHS, 0.9)
         model.train()
         
-        for images, labels in train_loader:
+        loop = tqdm(train_loader, desc=f"Trial Epoch {epoch+1}/{MAX_TUNE_EPOCHS}", leave=False)
+        
+        for images, labels in loop:
             images, labels = images.to(DEVICE), labels.to(DEVICE)
             optimizer.zero_grad()
             embeddings = model.forward_once(images)
             loss = criterion_train(embeddings, labels)
             loss.backward()
             optimizer.step()
+
+            loop.set_postfix(loss=loss.item())
             
-        # Validation
         val_loss, val_acc = validate(model, val_loader, criterion=criterion_val)
-        
-        # Step LR
         scheduler.step()
         
-        # Track Best
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             

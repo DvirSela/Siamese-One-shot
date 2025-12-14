@@ -81,11 +81,11 @@ def main():
         
         writer.add_scalar('Loss/Train', avg_train_loss, epoch)
         writer.add_scalar('Loss/Val', val_loss, epoch)
-        writer.add_scalar('Accuracy/Val', val_acc, epoch) # Train Acc is hard to define for triplets
+        writer.add_scalar('Accuracy/Val', val_acc, epoch) 
         writer.add_scalar('Hyperparam/Momentum', curr_momentum, epoch)
         writer.add_scalar('Hyperparam/LR', scheduler.get_last_lr()[0], epoch)
         
-        print(f"Epoch [{epoch+1}] Train Loss: {avg_train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.2%}")
+        print(f"T Loss: {avg_train_loss:.4f} | V Loss: {val_loss:.4f} | Val Acc: {val_acc:.2%}")
 
         scheduler.step()
 

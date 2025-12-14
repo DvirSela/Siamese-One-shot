@@ -8,30 +8,20 @@ class SiameseNetwork(nn.Module):
         super(SiameseNetwork, self).__init__()
         self.backbone_name = backbone_name
 
-        # --------------------------
-        # 1. Load Backbone & Detect Features
-        # --------------------------
         if backbone_name in ['resnet18', 'resnet34', 'resnet50']:
             self.backbone = getattr(models, backbone_name)(weights='DEFAULT' if pretrained else None)
             in_features = self.backbone.fc.in_features
-            
-        elif backbone_name in ['mobilenet_v2', 'mobilenet_v3_small', 'mobilenet_v3_large']:
-            self.backbone = getattr(models, backbone_name)(weights='DEFAULT' if pretrained else None)
-            in_features = self.backbone.classifier[-1].in_features
-            
+
         elif backbone_name in ['vit_b_16', 'vit_b_32', 'vit_l_16', 'vit_l_32']:
+            print(f'using model {backbone_name}')
             self.backbone = getattr(models, backbone_name)(weights='DEFAULT' if pretrained else None)
             in_features = self.backbone.heads[-1].in_features
         else:
             raise ValueError(f"Backbone {backbone_name} not supported yet.")
 
-        # Freeze weights
         for param in self.backbone.parameters():
             param.requires_grad = False
 
-        # --------------------------
-        # 2. Modify First Layer (3 Channels -> 1 Channel)
-        # --------------------------
         if 'resnet' in backbone_name:
             original_layer = self.backbone.conv1
             self.backbone.conv1 = nn.Conv2d(
@@ -40,7 +30,7 @@ class SiameseNetwork(nn.Module):
                 kernel_size=original_layer.kernel_size,
                 stride=original_layer.stride,
                 padding=original_layer.padding,
-                bias=False # ResNet usually has no bias in conv1 because BN follows
+                bias=False
             )
             with torch.no_grad():
                 self.backbone.conv1.weight.data = original_layer.weight.data.mean(dim=1, keepdim=True)
@@ -65,7 +55,6 @@ class SiameseNetwork(nn.Module):
         elif 'vit' in backbone_name:
             original_layer = self.backbone.conv_proj
             
-            # CHECK if the original layer has a bias
             has_bias = original_layer.bias is not None
             
             self.backbone.conv_proj = nn.Conv2d(
@@ -74,10 +63,9 @@ class SiameseNetwork(nn.Module):
                 kernel_size=original_layer.kernel_size,
                 stride=original_layer.stride,
                 padding=original_layer.padding,
-                bias=has_bias  # Pass BOOLEAN here
+                bias=has_bias
             )
             
-            # Copy weights
             with torch.no_grad():
                 self.backbone.conv_proj.weight.data = original_layer.weight.data.mean(dim=1, keepdim=True)
                 if has_bias:
@@ -85,20 +73,16 @@ class SiameseNetwork(nn.Module):
 
             self.backbone.heads = nn.Identity()
 
-        # --------------------------
-        # 3. Projection Head
-        # --------------------------
         self.fc = nn.Sequential(
             nn.Linear(in_features, 512),
             nn.BatchNorm1d(512),
             # nn.ReLU(inplace=True) 
         )
-
+        print('finished init')
     def forward_once(self, x):
         features = self.backbone(x)
-        # Handle ViT output which might be a dictionary or tuple
         if isinstance(features, dict):
-            features = features['last_hidden_state'][:, 0] # CLS token
+            features = features['last_hidden_state'][:, 0]
         
         embeddings = self.fc(features)
         embeddings = F.normalize(embeddings, p=2, dim=1) 
