@@ -11,15 +11,8 @@ class SiameseNetwork(nn.Module):
         if backbone_name in ['resnet18', 'resnet34', 'resnet50']:
             self.backbone = getattr(models, backbone_name)(weights='DEFAULT' if pretrained else None)
             in_features = self.backbone.fc.in_features
-            
-        elif backbone_name in ['mobilenet_v2', 'mobilenet_v3_small', 'mobilenet_v3_large']:
-            self.backbone = getattr(models, backbone_name)(weights='DEFAULT' if pretrained else None)
-            # MobileNet classifier is usually a Sequential
-            in_features = self.backbone.classifier[-1].in_features
-            
         elif backbone_name in ['vit_b_16', 'vit_b_32', 'vit_l_16', 'vit_l_32']:
             self.backbone = getattr(models, backbone_name)(weights='DEFAULT' if pretrained else None)
-            # ViT heads is a Sequential
             in_features = self.backbone.heads[-1].in_features
         else:
             raise ValueError(f"Backbone {backbone_name} not supported yet.")
@@ -28,7 +21,6 @@ class SiameseNetwork(nn.Module):
         for param in self.backbone.parameters():
             param.requires_grad = False
 
-        # Modify First Layer
         if 'resnet' in backbone_name:
             original_layer = self.backbone.conv1
             self.backbone.conv1 = nn.Conv2d(
@@ -44,38 +36,23 @@ class SiameseNetwork(nn.Module):
             
             # Remove Head
             self.backbone.fc = nn.Identity()
-
-        elif 'mobilenet' in backbone_name:
-            # MobileNet v2/v3 first layer is 'features[0][0]'
-            original_layer = self.backbone.features[0][0]
-            self.backbone.features[0][0] = nn.Conv2d(
-                in_channels=1,
-                out_channels=original_layer.out_channels,
-                kernel_size=original_layer.kernel_size,
-                stride=original_layer.stride,
-                padding=original_layer.padding,
-                bias=False
-            )
-            with torch.no_grad():
-                self.backbone.features[0][0].weight.data = original_layer.weight.data.mean(dim=1, keepdim=True)
-            
-            # Remove Head
-            self.backbone.classifier = nn.Identity()
-
         elif 'vit' in backbone_name:
             # ViT first layer is 'conv_proj' (Patch Embedding)
             original_layer = self.backbone.conv_proj
+            has_bias = original_layer.bias is not None
+            
             self.backbone.conv_proj = nn.Conv2d(
                 in_channels=1,
                 out_channels=original_layer.out_channels,
                 kernel_size=original_layer.kernel_size,
                 stride=original_layer.stride,
                 padding=original_layer.padding,
-                bias=original_layer.bias
+                bias=has_bias
             )
             with torch.no_grad():
                 self.backbone.conv_proj.weight.data = original_layer.weight.data.mean(dim=1, keepdim=True)
-
+                if has_bias:
+                    self.backbone.conv_proj.bias.data = original_layer.bias.data
             # Remove Head
             self.backbone.heads = nn.Identity()
 
@@ -88,6 +65,9 @@ class SiameseNetwork(nn.Module):
 
     def forward_once(self, x):
         features = self.backbone(x)
+        if isinstance(features, dict):
+             # Extract the CLS token (index 0) from the last hidden state
+            features = features['last_hidden_state'][:, 0]
         embeddings = self.fc(features)
         return embeddings
 
