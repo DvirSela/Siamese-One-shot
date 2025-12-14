@@ -37,21 +37,6 @@ class SiameseNetwork(nn.Module):
             
             self.backbone.fc = nn.Identity()
 
-        elif 'mobilenet' in backbone_name:
-            original_layer = self.backbone.features[0][0]
-            self.backbone.features[0][0] = nn.Conv2d(
-                in_channels=1,
-                out_channels=original_layer.out_channels,
-                kernel_size=original_layer.kernel_size,
-                stride=original_layer.stride,
-                padding=original_layer.padding,
-                bias=False
-            )
-            with torch.no_grad():
-                self.backbone.features[0][0].weight.data = original_layer.weight.data.mean(dim=1, keepdim=True)
-            
-            self.backbone.classifier = nn.Identity()
-
         elif 'vit' in backbone_name:
             original_layer = self.backbone.conv_proj
             
