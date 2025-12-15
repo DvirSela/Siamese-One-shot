@@ -15,14 +15,96 @@ import torchvision.transforms as T
 from src.models.simple_model import SimpleSiameseNetwork
 
 from src.config import BATCH_SIZE, SEED, MODEL_NAME
-# Added PAIRS_FILE
+
 from src.consts import IMG_DIR, DEVICE, TEST_PAIRS_FILE, MODEL_PATH, PAIRS_FILE
 from src.dataset import SiameseDataset, parse_lfw_pairs
 from src.models.siamese_model import SiameseNetwork
 from src.utils import set_seed
 from src.transforms import get_transforms
 
+def visualize_success_cases(model_path: str, save_path: str = "success_cases.png"):
+    """
+    Visualizes the 'Best' successes:
+    - 2 True Positives (Same Identity) with the LOWEST distance (High Confidence).
+    - 2 True Negatives (Diff Identity) with the HIGHEST distance (High Confidence).
+    Args:
+        model_path (str): Path to the model checkpoint.
+        save_path (str): Path to save the visualization image.
+    """
+    model = load_model_safely(model_path)
+    if model is None: return
 
+    backbone = getattr(model, 'backbone_name', '').lower()
+    is_clip = 'clip' in backbone
+    transform = get_transforms(is_train=False, use_clip=is_clip)
+
+    pairs, labels = parse_lfw_pairs(TEST_PAIRS_FILE, IMG_DIR)
+    dataset = SiameseDataset(pairs, labels, transform=transform)
+    loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
+    
+    model.eval()
+    
+    tp_candidates = []
+    tn_candidates = [] 
+
+    with torch.no_grad():
+        for img1, img2, label_batch in loader:
+            img1, img2 = img1.to(DEVICE), img2.to(DEVICE)
+            output = model(img1, img2)
+            
+            if isinstance(output, tuple):
+                dists = F.pairwise_distance(output[0], output[1])
+            else:
+                dists = 1.0 - output.squeeze()
+            
+            dists_np = dists.cpu().numpy()
+            labels_np = label_batch.numpy().flatten()
+            
+            for i in range(len(labels_np)):
+                dist = dists_np[i]
+                lbl = labels_np[i]
+                
+                if lbl == 1:
+                    tp_candidates.append((dist, img1[i].cpu(), img2[i].cpu()))
+                else:
+                    tn_candidates.append((dist, img1[i].cpu(), img2[i].cpu()))
+
+    tp_candidates.sort(key=lambda x: x[0], reverse=False)
+    
+    tn_candidates.sort(key=lambda x: x[0], reverse=True)
+    
+    top_tps = tp_candidates[:2]
+    top_tns = tn_candidates[:2]
+    
+    fig, axes = plt.subplots(2, 4, figsize=(12, 6))
+    
+    cols = ["Match (A)", "Match (B)", "Non-Match (A)", "Non-Match (B)"]
+    for ax, col in zip(axes[0], cols):
+        ax.set_title(col, fontsize=10, fontweight='bold')
+
+    for i, (dist, i1, i2) in enumerate(top_tps):
+        axes[i, 0].imshow(inverse_transform(i1), cmap='gray')
+        axes[i, 0].set_ylabel(f"TP #{i+1}", fontsize=9)
+        axes[i, 1].imshow(inverse_transform(i2), cmap='gray')
+        axes[i, 1].text(0.5, -0.2, f"Dist: {dist:.4f}\n(Confident Match)", 
+                        ha='center', transform=axes[i, 1].transAxes, color='green', fontsize=9)
+
+    for i, (dist, i1, i2) in enumerate(top_tns):
+        axes[i, 2].imshow(inverse_transform(i1), cmap='gray')
+        axes[i, 3].imshow(inverse_transform(i2), cmap='gray')
+        axes[i, 3].text(0.5, -0.2, f"Dist: {dist:.4f}\n(Confident Diff)", 
+                        ha='center', transform=axes[i, 3].transAxes, color='green', fontsize=9)
+
+    for ax in axes.flatten():
+        ax.set_xticks([])
+        ax.set_yticks([])
+        if not ax.has_data(): ax.axis('off')
+
+    plt.tight_layout()
+    plt.savefig(save_path, bbox_inches='tight')
+    print(f"   [+] Saved Success Cases to {save_path}")
+    plt.close()
+    
 def inverse_transform(img_tensor: torch.Tensor) -> np.ndarray:
     """
     Inverse the normalization for visualization.
