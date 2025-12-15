@@ -14,16 +14,15 @@ from src.models.siamese_model import SiameseNetwork
 from src.utils import set_seed
 from src.transforms import get_transforms
 
-MODEL_A_PATH = "./triplet_loss OHEM resnet euclidian.pth"
-MODEL_B_PATH = "./best_model_vit_b_32.pth"
 
-def load_model_architecture(model_path):
+def load_model_architecture(model_path: str):
     """
     Determines architecture from filename and loads weights.
     """
     filename = os.path.basename(model_path).lower()
-    
-    if "vit" in filename:
+    if 'clip' in filename:
+        model = SiameseNetwork(backbone_name='clip_vit_b32', pretrained=False)
+    elif "vit" in filename:
         arch = "vit_b_32" if "b_32" in filename else "vit_b_16"
         model = SiameseNetwork(backbone_name=arch, pretrained=False)
     else:
