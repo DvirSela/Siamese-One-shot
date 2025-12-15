@@ -19,11 +19,12 @@ def main():
     print(f"Running on: {DEVICE}")
     print(f'Training with OHEM (Batch Hard)')
 
+    use_clip = "clip" in MODEL_NAME
     train_dataset, train_sampler, val_dataset = get_ohem_dataloaders(
         PAIRS_FILE, IMG_DIR,
         val_size=0.2,
-        transform_train=get_transforms(is_train=True),
-        transform_val=get_transforms(is_train=False),
+        transform_train=get_transforms(is_train=True, use_clip=use_clip),
+        transform_val=get_transforms(is_train=False, use_clip=use_clip),
         p=P_PEOPLE, k=K_IMAGES
     )
 

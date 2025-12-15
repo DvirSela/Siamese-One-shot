@@ -19,4 +19,4 @@ P_PEOPLE = 8
 K_IMAGES = 4
 
 # Ensemble Model Paths
-MODEL_PATHS_ENSEMBLE = ["./triplet_loss OHEM resnet euclidian.pth", "./best_model_vit_b_32.pth"]
+MODEL_PATHS_ENSEMBLE = ["./triplet_loss OHEM resnet euclidian.pth", "./vit_b_32_best_model.pth"]

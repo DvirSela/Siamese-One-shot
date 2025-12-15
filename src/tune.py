@@ -25,12 +25,13 @@ def objective(trial):
         p_people, k_images = 8, 4
     else:
         p_people, k_images = 16, 2
-        
+    
+    use_clip = "clip" in MODEL_NAME
     train_dataset, train_sampler, val_dataset = get_ohem_dataloaders(
         PAIRS_FILE, IMG_DIR,
         val_size=0.2,
-        transform_train=get_transforms(is_train=True),
-        transform_val=get_transforms(is_train=False),
+        transform_train=get_transforms(is_train=True, use_clip=use_clip),
+        transform_val=get_transforms(is_train=False, use_clip=use_clip),
         p=p_people, k=k_images
     )
     
@@ -45,7 +46,7 @@ def objective(trial):
     optimizer = get_optimizer(model, lr=lr, momentum=0.9, weight_decay=weight_decay, optimizer_name=OPTIMIZER)
     scheduler = get_lr_scheduler(optimizer)
     
-    MAX_TUNE_EPOCHS = 30
+    MAX_TUNE_EPOCHS = 70
     best_val_acc = 0.0
     
     for epoch in range(MAX_TUNE_EPOCHS):
